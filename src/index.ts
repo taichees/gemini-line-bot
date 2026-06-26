@@ -37,17 +37,22 @@ app.post('/webhook', async (c) => {
  * LINEの最新仕様に準拠したJWT（チャネルアクセストークン）を
  * Web Crypto APIを使って生成する関数
  */
+/**
+ * LINEの最新仕様に完全準拠したJWT（アサーション）を生成する関数
+ */
 async function generateJWT(channelId: string, channelSecret: string): Promise<string> {
   const encoder = new TextEncoder()
 
-  // ヘッダーとペイロードの作成（有効期限は短めで1分間に設定）
+  // ヘッダーの指定
   const header = { alg: 'HS256', typ: 'JWT' }
+
+  // ペイロード（LINE公式の仕様に完全準拠させます）
   const now = Math.floor(Date.now() / 1000)
   const payload = {
-    iss: channelId,
-    sub: channelId,
-    aud: 'https://api.line.me/',
-    exp: now + 60,
+    iss: channelId, // チャネルID
+    sub: channelId, // チャネルID
+    aud: 'https://api.line.me/oauth2/v3/token', // 👈 ここが最新仕様の認証先URLになります
+    exp: now + 60, // 有効期限（1分）
     iat: now,
   }
 
