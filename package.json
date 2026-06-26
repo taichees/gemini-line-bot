@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
-    "hono": "^4.12.27"
+    "hono": "^4.12.27",
+    "stripe": "^22.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260625.1",

@@ -15,7 +15,10 @@
 			"binding": "gemini_limit_kv",
 			"id": "d4ed554134844816afa8a8375ff5a5f7"
 		}
-	]
+	],
+  "vars": {
+    "STRIPE_PRICE_ID": "prod_Um0w0r3KFiKOEf"
+  }
 	// "compatibility_flags": [
 	//   "nodejs_compat"
 	// ],

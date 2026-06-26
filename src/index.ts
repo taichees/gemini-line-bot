@@ -1,17 +1,65 @@
 import { Hono } from 'hono'
 import { GoogleGenAI } from '@google/genai'
+import Stripe from 'stripe'
 
 type Bindings = {
   LINE_CHANNEL_ACCESS_TOKEN: string
   GEMINI_API_KEY: string
-  DB: D1Database // 👈 D1データベースを追加
-  gemini_limit_kv?: KVNamespace // 👈 回数制限用のKV（未設定でもエラーにならないよう任意にしています）
+  STRIPE_SECRET_KEY: string
+  STRIPE_PRICE_ID: string
+  DB: D1Database
+  gemini_limit_kv?: KVNamespace
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.get('/', (c) => c.text('LINE Gemini Worker is active!'))
 
+/**
+ * 💳 1. Stripe 決済セッション（URL）を発行するエンドポイント
+ */
+app.post('/create-checkout-session', async (c) => {
+  try {
+    const { userId } = await c.req.json<{ userId: string }>()
+
+    if (!userId) {
+      return c.json({ error: 'LINEのユーザーIDが必要ですデース！' }, 400)
+    }
+
+    // 💡 修正点: 型キャストを `as string` または正規のプロパティ指定に変更し `any` を排除
+    const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-02-24' as Stripe.StripeConfig['apiVersion'],
+    })
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'subscription',
+      line_items: [
+        {
+          price: c.env.STRIPE_PRICE_ID,
+          quantity: 1,
+        },
+      ],
+      client_reference_id: userId,
+      success_url: 'https://line.me/R/ti/p/@YOUR_BOT_LINE_ID',
+      cancel_url: 'https://line.me/R/ti/p/@YOUR_BOT_LINE_ID',
+    })
+
+    return c.json({ url: session.url })
+  } catch (error) {
+    // 💡 修正点: eslint のルールを一時的に無効化してログ出力を許可
+    // eslint-disable-next-line no-console
+    console.error('Stripe Session Error:', error)
+
+    // 💡 修正点: error を unknown として扱い、安全にメッセージを抽出（anyの排除）
+    const errorMessage = error instanceof Error ? error.message : 'Internal Server Error'
+    return c.json({ error: errorMessage }, 500)
+  }
+})
+
+/**
+ * 🤖 2. LINE Webhook エンドポイント
+ */
 app.post('/webhook', async (c) => {
   const data = await c.req.json()
   const events = data.events
@@ -28,12 +76,12 @@ app.post('/webhook', async (c) => {
         if (event.type === 'message' && event.message.type === 'text') {
           const replyToken = event.replyToken
           const userMessage = event.message.text
-          const userId = event.source.userId // 👈 ユーザーIDを取得
+          const userId = event.source.userId
 
           if (!userId) continue
 
           try {
-            // ─── 1. D1からユーザーの有料/無料ステータスを取得 ───
+            // ─── D1からユーザーの有料/無料ステータスを取得 ───
             const userRow = await c.env.DB.prepare(
               'SELECT status FROM users WHERE line_user_id = ?',
             )
@@ -43,7 +91,6 @@ app.post('/webhook', async (c) => {
             let userStatus = 'free'
 
             if (!userRow) {
-              // 新規ユーザーなら無料会員としてD1に登録
               await c.env.DB.prepare('INSERT INTO users (line_user_id, status) VALUES (?, ?)')
                 .bind(userId, 'free')
                 .run()
@@ -52,34 +99,31 @@ app.post('/webhook', async (c) => {
               userStatus = userRow.status
             }
 
-            // ─── 2. 無料ユーザーの場合のみ、KVで1日の回数制限チェック ───
+            // ─── 無料ユーザーの場合のみ、KVで1日の回数制限チェック ───
             if (userStatus === 'free' && c.env.gemini_limit_kv) {
-              const todayStr = new Date().toISOString().split('T')[0] // "2026-06-26" のような日付文字列
+              const todayStr = new Date().toISOString().split('T')[0]
               const kvKey = `count:${userId}:${todayStr}`
 
-              // 現在の送信回数を取得
               const currentCountRaw = await c.env.gemini_limit_kv.get(kvKey)
               const currentCount = currentCountRaw ? parseInt(currentCountRaw, 10) : 0
 
-              // 上限（1日10通）に達している場合
               if (currentCount >= 10) {
                 const limitMessage =
                   'Oh my god! ユーとのトークが楽しすぎて、今日の無料枠（10通）を使い切っちゃったデース！😭\n\n' +
                   '明日また喋るか、月額プレミアムプラン（ワンコイン！）に登録してくれたら、ミーと無制限に喋り放題だぞ！🔥\n' +
                   '登録はココから頼むデース！👇\n' +
-                  'https://liff.line.me/YOUR_LIFF_ID' // 👈 後ほどLIFFのURLに差し替えます
+                  'https://liff.line.me/YOUR_LIFF_ID'
 
                 await replyToLine(replyToken, limitMessage, c.env.LINE_CHANNEL_ACCESS_TOKEN)
-                continue // Geminiの呼び出しをスキップして次のイベントへ
+                continue
               }
 
-              // 回数をカウントアップ（その日の23:59に消えるようTTLを長めに設定：86400秒＝24時間）
               await c.env.gemini_limit_kv.put(kvKey, (currentCount + 1).toString(), {
                 expirationTtl: 86400,
               })
             }
 
-            // ─── 3. Gemini API の呼び出し（有料会員、または無料枠が残っている場合） ───
+            // ─── Gemini API の呼び出し ───
             const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
               contents: userMessage,
