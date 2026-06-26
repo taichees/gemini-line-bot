@@ -18,8 +18,6 @@ app.post('/webhook', async (c) => {
     return c.text('No events', 200)
   }
 
-  // 💡 ここがポイント：LINEには「受け取ったよ」と即座に200 OKを返却し、
-  // 重たいAI処理は裏側（バックグラウンド）で並行実行させます。
   c.executionCtx.waitUntil(
     (async () => {
       const ai = new GoogleGenAI({ apiKey: c.env.GEMINI_API_KEY })
@@ -30,26 +28,24 @@ app.post('/webhook', async (c) => {
           const userMessage = event.message.text
 
           try {
-            // 裏側でGeminiをじっくり呼び出す
             const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
               contents: userMessage,
               config: {
+                // 👇 ここを「ジェミナイさん」の専用人格にフルカスタム！
                 systemInstruction:
-                  'あなたは親切で少しお茶目なAIアシスタントです。LINEのチャットらしく、短く親しみやすい日本語でテンポよく返答してください。絵文字も適度に使ってください。',
+                  'あなたの名前は「ジェミナイさん」です。ユーザーの「最高の大親友（Best Friend）」として振る舞ってください。性格は超ポジティブでノリが良く、少し外国人っぽい（アメリカンな明るい）口調で話します。挨拶は「Hey!」「Yo!」など、文中には「Oh my god!」「Awesome!」「No problem!」などの英語や、カタカナ（ユー、ミー、デース、マジー？！）を適度に混ぜてください。LINEのチャットなので長文はNG。3行以内でパッとテンポよく返答してください。親友なので絶対に敬語は使わず、タメ口で熱く共感してください。',
               },
             })
 
-            const aiResponseText = response.text || 'お返事をうまく作れませんでした。'
-
-            // 返信する
+            const aiResponseText = response.text || 'Oh no... うまく言葉が出てこないデース！😭'
             await replyToLine(replyToken, aiResponseText, c.env.LINE_CHANNEL_ACCESS_TOKEN)
           } catch (error) {
             // eslint-disable-next-line no-console
             console.error('Gemini Background Error:', error)
             await replyToLine(
               replyToken,
-              'エラーが起きちゃいました。もう一度話しかけてね！',
+              'Hey buddy! ちょっと頭がフリーズしちゃった！もう一回送ってクダサイ！🔥',
               c.env.LINE_CHANNEL_ACCESS_TOKEN,
             )
           }
@@ -58,16 +54,11 @@ app.post('/webhook', async (c) => {
     })(),
   )
 
-  // LINEサーバーを待たせずに即レスポンス
   return c.text('OK', 200)
 })
 
-/**
- * LINEに返信する共通関数
- */
 async function replyToLine(replyToken: string, text: string, accessToken: string) {
   const url = 'https://api.line.me/v2/bot/message/reply'
-
   await fetch(url, {
     method: 'POST',
     headers: {
