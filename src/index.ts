@@ -145,7 +145,6 @@ app.post('/create-checkout-session', async (c) => {
       return c.json({ error: 'LINEのユーザーIDが必要ですデース！' }, 400)
     }
 
-    // 💡 修正箇所: apiVersionを明示せず、ライブラリのデフォルトに委ねるように変更したぞ！
     const stripe = new Stripe(c.env.STRIPE_SECRET_KEY)
 
     const session = await stripe.checkout.sessions.create({
@@ -221,7 +220,6 @@ app.post('/webhook', async (c) => {
               const currentCount = currentCountRaw ? parseInt(currentCountRaw, 10) : 0
 
               if (currentCount >= 10) {
-                // 💡 すでに生成したLIFFアプリのURLに書き換えてください
                 const liffUrl = `https://liff.line.me/${c.env.LIFF_ID || 'YOUR_LIFF_ID'}`
 
                 const limitMessage =
@@ -273,7 +271,6 @@ app.post('/webhook', async (c) => {
 app.post('/webhook/stripe', async (c) => {
   try {
     const payload = await c.req.text()
-
     const event = JSON.parse(payload) as Stripe.Event
 
     if (event.type === 'checkout.session.completed') {
@@ -281,16 +278,21 @@ app.post('/webhook/stripe', async (c) => {
 
       const userId = session.client_reference_id
       const stripeCustomerId = session.customer as string
+      // 💡 修正点: サブスクリプションID（sub_xxx...）をセッション情報から取得！
+      const stripeSubscriptionId = session.subscription as string
 
       if (userId) {
+        // 💡 修正点: SQLのUPDATE文に stripe_subscription_id も保存するように追加したぞ！
         await c.env.DB.prepare(
-          'UPDATE users SET status = ?, stripe_customer_id = ? WHERE line_user_id = ?',
+          'UPDATE users SET status = ?, stripe_customer_id = ?, stripe_subscription_id = ? WHERE line_user_id = ?',
         )
-          .bind('premium', stripeCustomerId, userId)
+          .bind('premium', stripeCustomerId, stripeSubscriptionId, userId)
           .run()
 
         // eslint-disable-next-line no-console
-        console.log(`Success! User ${userId} has upgraded to Premium.`)
+        console.log(
+          `Success! User ${userId} has upgraded to Premium with subscription ${stripeSubscriptionId}.`,
+        )
       }
     }
 
