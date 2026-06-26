@@ -17,7 +17,8 @@
 		}
 	],
   "vars": {
-    "STRIPE_PRICE_ID": "prod_Um0w0r3KFiKOEf"
+    "STRIPE_PRICE_ID": "prod_Um0w0r3KFiKOEf",
+    "LIFF_ID": "2010520900-ZM10jHMO"
   }
 	// "compatibility_flags": [
 	//   "nodejs_compat"
