@@ -158,8 +158,8 @@ app.post('/create-checkout-session', async (c) => {
         },
       ],
       client_reference_id: userId,
-      success_url: 'https://line.me/R/ti/p/@YOUR_BOT_LINE_ID',
-      cancel_url: 'https://line.me/R/ti/p/@YOUR_BOT_LINE_ID',
+      success_url: 'https://line.me/R/ti/p/@213bwpqs',
+      cancel_url: 'https://line.me/R/ti/p/@213bwpqs',
     })
 
     return c.json({ url: session.url })
