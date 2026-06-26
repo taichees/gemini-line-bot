@@ -17,6 +17,7 @@
 		}
 	],
   "vars": {
+    "GEMINI_MODEL": "gemini-2.5-flash",
     "STRIPE_PRICE_ID": "price_1TmSuhAPBifprqJKT9IU5Qnn",
     "LIFF_ID": "2010520900-ZM10jHMO"
   }

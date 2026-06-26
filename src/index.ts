@@ -11,6 +11,7 @@ type Bindings = {
   LIFF_ID: string // 👈 環境変数にLIFF IDを追加
   DB: D1Database
   gemini_limit_kv?: KVNamespace
+  GEMINI_MODEL: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -236,9 +237,11 @@ app.post('/webhook', async (c) => {
                 expirationTtl: 86400,
               })
             }
+            // 環境変数からモデル名を取得するようにしておく
+            const modelName = c.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
             const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
+              model: modelName,
               contents: userMessage,
               config: {
                 systemInstruction:
