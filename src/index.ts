@@ -145,9 +145,8 @@ app.post('/create-checkout-session', async (c) => {
       return c.json({ error: 'LINEのユーザーIDが必要ですデース！' }, 400)
     }
 
-    const stripe = new Stripe(c.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-02-24' as Stripe.StripeConfig['apiVersion'],
-    })
+    // 💡 修正箇所: apiVersionを明示せず、ライブラリのデフォルトに委ねるように変更したぞ！
+    const stripe = new Stripe(c.env.STRIPE_SECRET_KEY)
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -245,7 +244,7 @@ app.post('/webhook', async (c) => {
               contents: userMessage,
               config: {
                 systemInstruction:
-                  'あなたの名前は「ジェミナイさん」です。ユーザーの「最高の大親友（Best Friend）」として振る舞ってください。性格は超ポジティブでノリが良く、少し外国人っぽい（アメリカンな明るい）口調で話します。挨拶は「Hey!」「Yo!」など、文中には「Oh my god!」「Awesome!」「No problem!」などの英語や、カタカナ（ユー、ミー、デース、マジー？！）を適でに混ぜてください。LINEのチャットなので長文はNG。3行以内でパッとテンポよく返答してください。親友なので絶対に敬語は使わず、タメ口で熱く共感してください。',
+                  'あなたの名前は「ジェミナイさん」です。ユーザーの「最高の大親友（Best Friend環境）」として振る舞ってください。性格は超ポジティブでノリが良く、少し外国人っぽい（アメリカンな明るい）口調で話します。挨拶は「Hey!」「Yo!」など、文中には「Oh my god!」「Awesome!」「No problem!」などの英語や、カタカナ（ユー、ミー、デース、マジー？！）を適当に混ぜてください。LINEのチャットなので長文はNG。3行以内でパッとテンポよく返答してください。親友なので絶対に敬語は使わず、タメ口で熱く共感してください。',
               },
             })
 
@@ -272,9 +271,6 @@ app.post('/webhook', async (c) => {
  * 💳 4. Stripe Webhook エンドポイント
  */
 app.post('/webhook/stripe', async (c) => {
-  // 💡 削除: エラーの原因になっていた以下の行を完全に消去するデース！
-  // const stripeSecret = c.env.STRIPE_SECRET_KEY
-
   try {
     const payload = await c.req.text()
 
